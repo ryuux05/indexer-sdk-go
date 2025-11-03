@@ -1,4 +1,4 @@
-package core
+package processor
 
 import (
 	"context"
@@ -10,6 +10,10 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/ryuux05/godex/pkg/core/rpc"
+	"github.com/ryuux05/godex/pkg/core/utils"
+	"github.com/ryuux05/godex/pkg/core/types"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -38,7 +42,7 @@ func TestRunWithOneLog_Success(t *testing.T) {
 
 		case "eth_getBlockByNumber":
 			s := fmt.Sprintf("%s", req.Params[0])
-			blockNum, err := HexQtyToUint64(s)
+			blockNum, err := utils.HexQtyToUint64(s)
 			assert.NoError(t, err)
 
 
@@ -48,7 +52,7 @@ func TestRunWithOneLog_Success(t *testing.T) {
 				"result": map[string]any {
 					"Number": req.Params[0],
 					"Hash": req.Params[0],
-					"ParentHash": Uint64ToHexQty(blockNum - 1), 
+					"ParentHash": utils.Uint64ToHexQty(blockNum - 1), 
 					"Timestamp": fmt.Sprintf("%d",time.Now().Unix()),
 				},
 			})
@@ -132,7 +136,7 @@ func TestRunWithOneLog_Success(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	rpc := NewHTTPRPC(srv.URL, 0)
+	rpc := rpc.NewHTTPRPC(srv.URL, 0)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -157,7 +161,7 @@ func TestRunWithOneLog_Success(t *testing.T) {
 	go func() { _ = processor.Run(ctx)}()
 
 
-	var logs []Log
+	var logs []types.Log
 	logsCh, err := processor.Logs(chain.ChainId)
 	if err != nil {
 		log.Fatal(err)
@@ -207,7 +211,7 @@ func TestRunWithMultipleLog_Success(t *testing.T) {
 
 		case "eth_getBlockByNumber":
 			s := fmt.Sprintf("%s", req.Params[0])
-			blockNum, err := HexQtyToUint64(s)
+			blockNum, err := utils.HexQtyToUint64(s)
 			assert.NoError(t, err)
 
 
@@ -217,7 +221,7 @@ func TestRunWithMultipleLog_Success(t *testing.T) {
 				"result": map[string]any {
 					"Number": req.Params[0],
 					"Hash": req.Params[0],
-					"ParentHash": Uint64ToHexQty(blockNum - 1), 
+					"ParentHash": utils.Uint64ToHexQty(blockNum - 1), 
 					"Timestamp": fmt.Sprintf("%d",time.Now().Unix()),
 				},
 			})
@@ -291,7 +295,7 @@ func TestRunWithMultipleLog_Success(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	rpc := NewHTTPRPC(srv.URL, 0)
+	rpc := rpc.NewHTTPRPC(srv.URL, 0)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -316,7 +320,7 @@ func TestRunWithMultipleLog_Success(t *testing.T) {
 
 
 
-	var logs []Log
+	var logs []types.Log
 
 
 	done := make(chan struct{})
@@ -383,7 +387,7 @@ func TestReorg_Success(t *testing.T) {
 		case "eth_getBlockByNumber":
 			s := fmt.Sprintf("%s", req.Params[0])
 
-			blockNum, err := HexQtyToUint64(s)
+			blockNum, err := utils.HexQtyToUint64(s)
 			assert.NoError(t, err)
 
 			if !flip && blockNum == 41 {
@@ -405,7 +409,7 @@ func TestReorg_Success(t *testing.T) {
 					"result": map[string]any {
 						"Number": req.Params[0],
 						"Hash": req.Params[0],
-						"ParentHash": Uint64ToHexQty(blockNum - 1), 
+						"ParentHash": utils.Uint64ToHexQty(blockNum - 1), 
 						"Timestamp": fmt.Sprintf("%d",time.Now().Unix()),
 					},
 				})
@@ -436,7 +440,7 @@ func TestReorg_Success(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	rpc := NewHTTPRPC(srv.URL, 0)
+	rpc := rpc.NewHTTPRPC(srv.URL, 0)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -461,7 +465,7 @@ func TestReorg_Success(t *testing.T) {
 
 
 
-	var logs []Log
+	var logs []types.Log
 
 
 	done := make(chan struct{})
@@ -553,14 +557,14 @@ func TestRunWithRetry_Success(t *testing.T) {
 			})
 
 		case "eth_getBlockByNumber":
-			blockNum, _ := HexQtyToUint64(fmt.Sprintf("%s", req.Params[0]))
+			blockNum, _ := utils.HexQtyToUint64(fmt.Sprintf("%s", req.Params[0]))
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"jsonrpc": "2.0",
 				"id":      1,
 				"result": map[string]any{
 					"Number":     req.Params[0],
 					"Hash":       req.Params[0],
-					"ParentHash": Uint64ToHexQty(blockNum - 1),
+					"ParentHash": utils.Uint64ToHexQty(blockNum - 1),
 					"Timestamp":  fmt.Sprintf("%d", time.Now().Unix()),
 				},
 			})
@@ -571,12 +575,12 @@ func TestRunWithRetry_Success(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	rpc := NewHTTPRPC(srv.URL, 0)
+	RPC := rpc.NewHTTPRPC(srv.URL, 0)
 
 	ctx, cancel := context.WithTimeout(context.Background(),  5 * time.Second)
 	defer cancel()
 
-	retryConfig := RetryConfig{
+	retryConfig := rpc.RetryConfig{
 		MaxAttempts:    3,
 		InitialBackoff: 10 * time.Millisecond,
 		MaxBackoff:     100 * time.Millisecond,
@@ -598,14 +602,14 @@ func TestRunWithRetry_Success(t *testing.T) {
 	chain := ChainInfo{
 		ChainId: "592",
 		Name: "Astar",
-		RPC: rpc,
+		RPC: RPC,
 	}
 
 	processor := NewProcessor()
 	processor.AddChain(chain, &opts)
 	go func() { _ = processor.Run(ctx)}()
 
-	var logs []Log
+	var logs []types.Log
 
 	done := make(chan struct{})
 	var mu sync.Mutex
@@ -696,14 +700,14 @@ func TestMultiChainRun_Success(t *testing.T) {
             })
             
         case "eth_getBlockByNumber":
-            blockNum, _ := HexQtyToUint64(fmt.Sprintf("%s", req.Params[0]))
+            blockNum, _ := utils.HexQtyToUint64(fmt.Sprintf("%s", req.Params[0]))
             _ = json.NewEncoder(w).Encode(map[string]any{
                 "jsonrpc": "2.0",
                 "id":      1,
                 "result": map[string]any{
                     "Number":     req.Params[0],
                     "Hash":       req.Params[0],
-                    "ParentHash": Uint64ToHexQty(blockNum - 1),
+                    "ParentHash": utils.Uint64ToHexQty(blockNum - 1),
                     "Timestamp":  fmt.Sprintf("%d", time.Now().Unix()),
                 },
             })
@@ -712,8 +716,8 @@ func TestMultiChainRun_Success(t *testing.T) {
     defer srv.Close()
     
     // Create two separate RPC clients (simulating different chains)
-    ethRPC := NewHTTPRPC(srv.URL, 0)
-    polyRPC := NewHTTPRPC(srv.URL, 0)
+    ethRPC := rpc.NewHTTPRPC(srv.URL, 0)
+    polyRPC := rpc.NewHTTPRPC(srv.URL, 0)
     
     processor := NewProcessor()
     
@@ -755,8 +759,8 @@ func TestMultiChainRun_Success(t *testing.T) {
     go processor.Run(ctx)
     
     // Collect logs from both chains
-    ethLogs := []Log{}
-    polyLogs := []Log{}
+    ethLogs := []types.Log{}
+    polyLogs := []types.Log{}
     
     ethCh, err := processor.Logs("1")
     assert.NoError(t, err)
@@ -861,14 +865,14 @@ func TestMultiChain_IndependentErrors(t *testing.T) {
             })
             
         case "eth_getBlockByNumber":
-            blockNum, _ := HexQtyToUint64(fmt.Sprintf("%s", req.Params[0]))
+            blockNum, _ := utils.HexQtyToUint64(fmt.Sprintf("%s", req.Params[0]))
             _ = json.NewEncoder(w).Encode(map[string]any{
                 "jsonrpc": "2.0",
                 "id":      1,
                 "result": map[string]any{
                     "Number":     req.Params[0],
                     "Hash":       req.Params[0],
-                    "ParentHash": Uint64ToHexQty(blockNum - 1),
+                    "ParentHash": utils.Uint64ToHexQty(blockNum - 1),
                     "Timestamp":  fmt.Sprintf("%d", time.Now().Unix()),
                 },
             })
@@ -882,7 +886,7 @@ func TestMultiChain_IndependentErrors(t *testing.T) {
     processor := NewProcessor()
     
     // Fast retry config so Ethereum fails quickly
-    fastRetry := &RetryConfig{
+    fastRetry := &rpc.RetryConfig{
         MaxAttempts:    2,
         InitialBackoff: 10 * time.Millisecond,
         MaxBackoff:     20 * time.Millisecond,
@@ -916,14 +920,14 @@ func TestMultiChain_IndependentErrors(t *testing.T) {
     err := processor.AddChain(ChainInfo{
         ChainId: "1",
         Name:    "Ethereum",
-        RPC:     NewHTTPRPC(ethSrv.URL, 0),
+        RPC:     rpc.NewHTTPRPC(ethSrv.URL, 0),
     }, ethOpts)
     assert.NoError(t, err)
     
     err = processor.AddChain(ChainInfo{
         ChainId: "137",
         Name:    "Polygon",
-        RPC:     NewHTTPRPC(polySrv.URL, 0),
+        RPC:     rpc.NewHTTPRPC(polySrv.URL, 0),
     }, polyOpts)
     assert.NoError(t, err)
     
@@ -934,7 +938,7 @@ func TestMultiChain_IndependentErrors(t *testing.T) {
     polyCh, err := processor.Logs("137")
     assert.NoError(t, err)
     
-    polyLogs := []Log{}
+    polyLogs := []types.Log{}
     var logsMu sync.Mutex
     
     go func() {
@@ -1006,14 +1010,14 @@ func TestMultiChain_BothChainsSucceed(t *testing.T) {
                 })
                 
             case "eth_getBlockByNumber":
-                blockNum, _ := HexQtyToUint64(fmt.Sprintf("%s", req.Params[0]))
+                blockNum, _ := utils.HexQtyToUint64(fmt.Sprintf("%s", req.Params[0]))
                 _ = json.NewEncoder(w).Encode(map[string]any{
                     "jsonrpc": "2.0",
                     "id":      1,
                     "result": map[string]any{
                         "Number":     req.Params[0],
                         "Hash":       req.Params[0],
-                        "ParentHash": Uint64ToHexQty(blockNum - 1),
+                        "ParentHash": utils.Uint64ToHexQty(blockNum - 1),
                         "Timestamp":  fmt.Sprintf("%d", time.Now().Unix()),
                     },
                 })
@@ -1037,15 +1041,15 @@ func TestMultiChain_BothChainsSucceed(t *testing.T) {
         LogsBufferSize:     10,
         FetchMode:          FetchModeLogs,
         Topics:             []string{"0xddf252ad"},
-        RetryConfig: &RetryConfig{
+        RetryConfig: &rpc.RetryConfig{
             MaxAttempts:    3,
             InitialBackoff: 10 * time.Millisecond,
             MaxBackoff:     50 * time.Millisecond,
         },
     }
     
-    processor.AddChain(ChainInfo{ChainId: "1", Name: "Eth", RPC: NewHTTPRPC(ethSrv.URL, 0)}, opts)
-    processor.AddChain(ChainInfo{ChainId: "137", Name: "Poly", RPC: NewHTTPRPC(polySrv.URL, 0)}, opts)
+    processor.AddChain(ChainInfo{ChainId: "1", Name: "Eth", RPC: rpc.NewHTTPRPC(ethSrv.URL, 0)}, opts)
+    processor.AddChain(ChainInfo{ChainId: "137", Name: "Poly", RPC: rpc.NewHTTPRPC(polySrv.URL, 0)}, opts)
     
     ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
     defer cancel()
@@ -1054,8 +1058,8 @@ func TestMultiChain_BothChainsSucceed(t *testing.T) {
     ethCh, _ := processor.Logs("1")
     polyCh, _ := processor.Logs("137")
     
-    ethLogs := []Log{}
-    polyLogs := []Log{}
+    ethLogs := []types.Log{}
+    polyLogs := []types.Log{}
     var mu sync.Mutex
     
     go func() {
@@ -1108,7 +1112,7 @@ func TestMultiChain_AddChainWhileRunning(t *testing.T) {
     }))
     defer srv.Close()
     
-    processor.AddChain(ChainInfo{ChainId: "1", RPC: NewHTTPRPC(srv.URL, 0)}, opts)
+    processor.AddChain(ChainInfo{ChainId: "1", RPC: rpc.NewHTTPRPC(srv.URL, 0)}, opts)
     
     ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
     defer cancel()
@@ -1117,7 +1121,7 @@ func TestMultiChain_AddChainWhileRunning(t *testing.T) {
     time.Sleep(100 * time.Millisecond) // Let it start
     
     // Try to add chain while running
-    err := processor.AddChain(ChainInfo{ChainId: "137", RPC: NewHTTPRPC(srv.URL, 0)}, opts)
+    err := processor.AddChain(ChainInfo{ChainId: "137", RPC: rpc.NewHTTPRPC(srv.URL, 0)}, opts)
     assert.Error(t, err)
     assert.Contains(t, err.Error(), "running")
 }

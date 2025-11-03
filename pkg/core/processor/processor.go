@@ -1,4 +1,4 @@
-package core
+package processor
 
 import (
 	"context"
@@ -6,6 +6,9 @@ import (
 	"log"
 	"sync"
 
+	"github.com/ryuux05/godex/pkg/core/rpc"
+	"github.com/ryuux05/godex/pkg/core/utils"
+	"github.com/ryuux05/godex/pkg/core/types"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -37,7 +40,7 @@ type Processor struct {
 	chains map[string]*chainState
 	// logsChan is a channel where processor will store the indexed logs
 	// It's a map with chainId as key.
-	logsCh map[string]chan Log
+	logsCh map[string]chan types.Log
 	// isRunning track the processor state if it's running or stopped.
 	// False by default until the processor run.
 	isRunning bool
@@ -48,7 +51,7 @@ type Processor struct {
 func NewProcessor() *Processor {
 	return &Processor{
 		chains: make(map[string]*chainState),
-		logsCh: make(map[string]chan Log),
+		logsCh: make(map[string]chan types.Log),
 		isRunning: false,
 	}
 }
@@ -71,7 +74,7 @@ func (p *Processor) AddChain(chain ChainInfo, opts *Options) error {
 	if cap < 8 { cap = 8 }
 	if cap > 256 { cap = 256 }
 
-	topics := ConvertToTopics(opts.Topics)
+	topics := utils.ConvertToTopics(opts.Topics)
 
 	// Check if fetch mode exists, fallback to logs as default if not specified
 	if opts.FetchMode == "" {
@@ -80,7 +83,7 @@ func (p *Processor) AddChain(chain ChainInfo, opts *Options) error {
 
 	// Check if retryconfig exists, use default if not specified
 	if opts.RetryConfig == nil {
-		defaultCfg := DefaultRetryConfig()
+		defaultCfg := rpc.DefaultRetryConfig()
     	opts.RetryConfig = &defaultCfg
 	}
 
@@ -95,7 +98,7 @@ func (p *Processor) AddChain(chain ChainInfo, opts *Options) error {
 	}
 
 	p.chains[chain.ChainId] = chainState
-	p.logsCh[chain.ChainId] = make(chan Log, opts.LogsBufferSize)
+	p.logsCh[chain.ChainId] = make(chan types.Log, opts.LogsBufferSize)
 
 	return nil
 }
@@ -129,7 +132,7 @@ func (p *Processor) Run(ctx context.Context) error{
 }
 
 // return the read-only channel
-func (p *Processor) Logs(chainId string) (<-chan Log, error) {
+func (p *Processor) Logs(chainId string) (<-chan types.Log, error) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	
@@ -140,14 +143,14 @@ func (p *Processor) Logs(chainId string) (<-chan Log, error) {
     return ch, nil
 }
 
-func (p *Processor) runChain(ctx context.Context, logsCh chan Log, chain *chainState) error {
+func (p *Processor) runChain(ctx context.Context, logsCh chan types.Log, chain *chainState) error {
 outer:
 	for {		
 		rpcCtx, rpcCancel := context.WithCancel(ctx)
 
 		// compute for new head
 		var headHex string
-		err := RetryWithBackoff(rpcCtx, *chain.opts.RetryConfig, func() error {
+		err := rpc.RetryWithBackoff(rpcCtx, *chain.opts.RetryConfig, func() error {
 			var err error
 			headHex, err = chain.chainInfo.RPC.Head(rpcCtx)
 			return err
@@ -157,7 +160,7 @@ outer:
 			return err
 		}
 
-		head, err := HexQtyToUint64(headHex)
+		head, err := utils.HexQtyToUint64(headHex)
 		if err != nil {
 			log.Println("Error in converting hex to uint64", err)
 			rpcCancel()
@@ -214,7 +217,7 @@ outer:
 		type doneMsg struct {
 			from uint64
 			to uint64
-			logs []Log
+			logs []types.Log
 		}
 		
 		doneCh := make(chan doneMsg, n)
@@ -223,14 +226,14 @@ outer:
 			go func(){
 				defer wg.Done()
 				for job := range jobs {
-					var logs []Log
+					var logs []types.Log
 					var err error
-					err = RetryWithBackoff(rpcCtx, *chain.opts.RetryConfig, func() error {	
+					err = rpc.RetryWithBackoff(rpcCtx, *chain.opts.RetryConfig, func() error {	
 						switch chain.opts.FetchMode {
 						case FetchModeLogs:
-							filter := Filter{
-								FromBlock: Uint64ToHexQty(job.from),
-								ToBlock: Uint64ToHexQty(job.to),
+							filter := types.Filter{
+								FromBlock: utils.Uint64ToHexQty(job.from),
+								ToBlock: utils.Uint64ToHexQty(job.to),
 								Topics: chain.topics,
 							}
 							logs, err = chain.chainInfo.RPC.GetLogs(rpcCtx, filter)
@@ -275,7 +278,7 @@ outer:
 		go func() {
 			defer close(arbiterDone)
 			window := make(map[uint64]uint64)
-			windowLogs:= make(map[uint64][]Log)
+			windowLogs:= make(map[uint64][]types.Log)
 			next := chain.cursor + 1
 
 			for {
@@ -291,10 +294,10 @@ outer:
 					for end, ok2 := window[next]; ok2; end, ok2 = window[next] {
 						
 						// Get start window blockhash and compare it with the stored blockhash
-						var block Block
-						err := RetryWithBackoff(ctx, *chain.opts.RetryConfig, func() error {
+						var block types.Block
+						err := rpc.RetryWithBackoff(ctx, *chain.opts.RetryConfig, func() error {
 							var err error
-							block, err = chain.chainInfo.RPC.GetBlock(rpcCtx, Uint64ToHexQty(next))
+							block, err = chain.chainInfo.RPC.GetBlock(rpcCtx, utils.Uint64ToHexQty(next))
 							return err
 						})
 
@@ -345,9 +348,9 @@ outer:
 						}
 						
 						// Get the end block blockhash after committing
-						err = RetryWithBackoff(ctx, *chain.opts.RetryConfig, func() error {
+						err = rpc.RetryWithBackoff(ctx, *chain.opts.RetryConfig, func() error {
 							var err error
-							block, err = chain.chainInfo.RPC.GetBlock(rpcCtx, Uint64ToHexQty(end))
+							block, err = chain.chainInfo.RPC.GetBlock(rpcCtx, utils.Uint64ToHexQty(end))
 							return err
 						})
 						if err != nil {
@@ -397,7 +400,7 @@ func (p *Processor) handleReorg(ctx context.Context, chain *chainState) uint64 {
 
 		fallback := chain.cursor; if fallback > chain.hardFallbackBlocks { fallback -= chain.hardFallbackBlocks } else { fallback = 0 }
 
-		windowHeadBlock, err := chain.chainInfo.RPC.GetBlock(ctx, Uint64ToHexQty(ancestor + 1))
+		windowHeadBlock, err := chain.chainInfo.RPC.GetBlock(ctx, utils.Uint64ToHexQty(ancestor + 1))
 		if err != nil {
 			return fallback
 		}
@@ -458,10 +461,10 @@ func (p *Processor) dropWindowHash(after uint64, chain *chainState) {
 }
 
 // Helper function to get logs from receipts
-func(p *Processor) fetchLogsFromReceipts(ctx context.Context, from uint64, to uint64, chain *chainState) ([]Log, error){
-	var allLogs []Log
+func(p *Processor) fetchLogsFromReceipts(ctx context.Context, from uint64, to uint64, chain *chainState) ([]types.Log, error){
+	var allLogs []types.Log
 	for blockNum := from; blockNum <= to; blockNum ++ {
-		s_blockNum := Uint64ToHexQty(blockNum)
+		s_blockNum := utils.Uint64ToHexQty(blockNum)
 		receipts, err := chain.chainInfo.RPC.GetBlockReceipts(ctx, s_blockNum)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get receipts for block %d: %w", blockNum, err)
@@ -479,7 +482,7 @@ func(p *Processor) fetchLogsFromReceipts(ctx context.Context, from uint64, to ui
 }
 
 // Checks if a log matches the configurated topic
-func(p *Processor) matchesTopicFilter(log Log, chain *chainState) bool {
+func(p *Processor) matchesTopicFilter(log types.Log, chain *chainState) bool {
 	// If there is no topic specified then its true by default
 	if len(chain.opts.Topics) == 0 {
 		return true

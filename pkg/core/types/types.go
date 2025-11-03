@@ -1,4 +1,4 @@
-package core
+package types
 
 const ZeroAddress Address = "0x0000000000000000000000000000000000000000"
 

@@ -1,4 +1,4 @@
-module github.com/ryuux05/indexer-sdk-go
+module github.com/ryuux05/godex
 
 go 1.24.0
 

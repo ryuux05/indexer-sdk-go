@@ -1,10 +1,11 @@
-package core
+package rpc
 
 import (
 	"context"
 	"testing"
 	"time"
 
+	"github.com/ryuux05/godex/pkg/core/errors"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -42,7 +43,7 @@ func TestRetryWithBackoff_SuccessAfterRetries(t *testing.T) {
 	fn := func() error {
 		calls ++;
 		if calls < 3 {
-			return &HTTPError{
+			return &errors.HTTPError{
 				StatusCode: 504,
 				Message: "timeout",
 			}
@@ -65,7 +66,7 @@ func TestRetryWithBackoff_MaxAttemptExceeded(t *testing.T) {
 	}
 
 	fn := func() error {
-		return &HTTPError{
+		return &errors.HTTPError{
 			StatusCode: 504,
 			Message: "timeout",
 		}
@@ -88,7 +89,7 @@ func TestRetryWithBackoff_NonRetryableError(t *testing.T) {
 	calls := 0
 	fn := func() error {
 		calls++
-		return &HTTPError{
+		return &errors.HTTPError{
 			StatusCode: 400,
 			Message: "bad request",
 		}
@@ -113,7 +114,7 @@ func TestRetryWithBackoff_ExponentialBackoff(t *testing.T) {
 	calls := 0
 	fn := func() error {
 		calls++
-		return &HTTPError{
+		return &errors.HTTPError{
 			StatusCode: 504,
 			Message: "gateway timeout",
 		}
@@ -140,7 +141,7 @@ func TestRetryWithBackoff_MaxBackoff(t *testing.T) {
 	calls := 0
 	fn := func() error {
 		calls++
-		return &HTTPError{
+		return &errors.HTTPError{
 			StatusCode: 504,
 			Message: "gateway timeout",
 		}

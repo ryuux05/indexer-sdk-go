@@ -1,4 +1,4 @@
-package core
+package rpc
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ryuux05/godex/pkg/core/types"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -156,7 +157,7 @@ func TestGetLogs_Success(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	filter := Filter{
+	filter := types.Filter{
 		FromBlock: "0x1",
 		ToBlock:   "0x2",
 		Address:   []string{"0xabc"},
@@ -187,7 +188,7 @@ func TestGetLogs_RPCError(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	_, err := rpc.GetLogs(ctx, Filter{})
+	_, err := rpc.GetLogs(ctx, types.Filter{})
 	assert.Error(t, err)
 }
 
@@ -201,7 +202,7 @@ func TestGetLogs_HTTPStatusNotOK(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	_, err := rpc.GetLogs(ctx, Filter{})
+	_, err := rpc.GetLogs(ctx, types.Filter{})
 	assert.Error(t, err)
 }
 
