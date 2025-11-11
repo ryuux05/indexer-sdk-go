@@ -329,7 +329,7 @@ outer:
 							return
 
 						} else {
-							log.Printf("Processed log from block %d to block %d...\n", next, end)
+							//log.Printf("Processed log from block %d to block %d...\n", next, end)
 							// Commit logs to log channel
 							if logs := windowLogs[next]; len(logs) > 0 {
 								for _, l:= range logs {
@@ -496,11 +496,10 @@ func(p *Processor) matchesTopicFilter(log types.Log, chain *chainState) bool {
 	// Match first topic (event signature)
     for _, filterTopic := range chain.topics {
         if len(log.Topics) > 0 {
-            if logTopic, ok := log.Topics[0].(string); ok {
-                if logTopic == filterTopic {
-                    return true
-                }
-            }
+            logTopic := log.Topics[0]
+			if logTopic == filterTopic {
+				return true
+			}
         }
     }
     

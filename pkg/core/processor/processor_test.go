@@ -37,7 +37,7 @@ func TestRunWithOneLog_Success(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"jsonrpc": "2.0",
 				"id":      1,
-				"result":  "0x10d4f",
+				"result":  "0x64",
 			})
 
 		case "eth_getBlockByNumber":
@@ -141,7 +141,7 @@ func TestRunWithOneLog_Success(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	opts := Options{
-		RangeSize:          100,
+		RangeSize:          10,
 		BatchSize:          50,
 		DecoderConcurrency: 1,
 		FetcherConcurrency: 4,
@@ -179,11 +179,7 @@ func TestRunWithOneLog_Success(t *testing.T) {
 	}
 	done:
 	fmt.Printf("Collected %d logs\n", len(logs))
-
-
 	cancel()
-
-
 }
 
 func TestRunWithMultipleLog_Success(t *testing.T) {

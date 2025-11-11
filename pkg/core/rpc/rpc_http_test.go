@@ -167,7 +167,7 @@ func TestGetLogs_Success(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, logs, 1)
 	assert.Equal(t, "0xabc", logs[0].Address)
-	assert.Equal(t,[]any{"0xddf252ad"}, logs[0].Topics)
+	assert.Equal(t,[]string{"0xddf252ad"}, logs[0].Topics)
 	assert.Equal(t, "0x1", logs[0].BlockNumber)
 }
 
