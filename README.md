@@ -198,10 +198,3 @@ The decoder is designed to be resilient. It returns `nil, nil` for logs that can
 - Use `FetchModeReceipts` for better performance when filtering by contract addresses
 - Monitor log channel buffer size to prevent blocking
 
-## License
-
-[Your License Here]
-
-## Contributing
-
-[Contributing Guidelines Here]
