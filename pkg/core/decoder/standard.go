@@ -14,23 +14,30 @@ import (
 )
 
 type StandardDecoder struct {
-	events map[string]*types.EventDefinition
+	events map[string]map[string]*types.EventDefinition
 }
 
 
 func NewStandsardDecoder() *StandardDecoder {
 	return &StandardDecoder{
-		events: make(map[string]*types.EventDefinition),
+		events: make(map[string]map[string]*types.EventDefinition),
 	}
 }
 
-func (d *StandardDecoder) Decode(log types.Log) (*types.Event, error) {
+func (d *StandardDecoder) Decode(name string, log types.Log) (*types.Event, error) {
 	// If topic is empty skip it
 	if len(log.Topics) == 0 {
 		return nil, nil 
 	}
 
-	e, exist := d.events[log.Topics[0]]
+	// Get the ABI map by name
+	abi, exists := d.events[name]
+	if !exists {
+		return nil, fmt.Errorf("ABI '%s' not found", name)
+	}
+
+
+	e, exist := abi[log.Topics[0]]
 	if !exist {
 		return nil, nil
 	}
@@ -42,14 +49,12 @@ func (d *StandardDecoder) Decode(log types.Log) (*types.Event, error) {
 	for _, input := range e.Inputs {
 		if input.Indexed == true {
 			if topicNum >= len(log.Topics) {
-                return nil, fmt.Errorf("event %s: missing indexed parameter %s (topic %d)", 
-                    e.Name, input.Name, topicNum)
+                return nil, nil
             }
 
 			value, err := decodeByType(log.Topics[topicNum][2:], input.Type)
 			if err != nil {
-				return nil, fmt.Errorf("event %s: failed to decode indexed parameter %s: %w", 
-				e.Name, input.Name, err)
+				return nil, nil
 			}
 			field[input.Name] = value
 			topicNum ++
@@ -63,18 +68,14 @@ func (d *StandardDecoder) Decode(log types.Log) (*types.Event, error) {
 				// Pass clean data without the 0x format
 				hexStart := 2 + (start * 2)
 				hexEnd := 2 + (end * 2)
-
-				fmt.Printf("%d", hexStart)
-				fmt.Printf("%d", hexEnd)
 				
 				if hexEnd > len(log.Data) {
-					return nil, fmt.Errorf("data too short: need %d bytes, got %d bytes (hexStart=%d, hexEnd=%d, dataOffset=%d, dataLen=%d, event=%s, param=%s)", 
-					(end-start), len(log.Data)-2, hexStart, hexEnd, dataOffset, len(log.Data), e.Name, input.Name)
+					return nil, nil
 				}
 				
 				value, err := decodeByType(log.Data[hexStart:hexEnd], input.Type)
 				if err != nil {
-					return nil, err
+					return nil, nil
 				}
 				
 				field[input.Name] = value
@@ -84,7 +85,7 @@ func (d *StandardDecoder) Decode(log types.Log) (*types.Event, error) {
 				// Offset is in byte
 				value, err := decodeByTypeWithOffset(log.Data[2:], dataOffset, input.Type)
 				if err != nil {
-					return nil, err
+					return nil, nil
 				}
 				
 				field[input.Name] = value
@@ -117,11 +118,15 @@ func (d *StandardDecoder) DecodeBatch(logs []types.Log) (*[]types.Event, error) 
 	return nil, nil
 }
 
-func (d *StandardDecoder) RegisterABI(abiJson string) error {
+func (d *StandardDecoder) RegisterABI(name, abiJson string) error {
 	var abi ABI 
 	err := json.Unmarshal([]byte(abiJson), &abi)
 	if err != nil {
 		return fmt.Errorf("invalid ABI JSON: %w", err)
+	}
+
+	if d.events[name] == nil {
+		d.events[name] = make(map[string]*types.EventDefinition)
 	}
 
 	for _, item := range abi {
@@ -141,13 +146,13 @@ func (d *StandardDecoder) RegisterABI(abiJson string) error {
 			Inputs: convertInputs(item.Inputs),
 		}
 
-		d.events[topicHash] = eventDefinition
+		d.events[name][topicHash] = eventDefinition
 	}
 
 	return nil
 }
 
-func (d *StandardDecoder) RegisterABIFromFile(filepath string) error{
+func (d *StandardDecoder) RegisterABIFromFile(name string, filepath string) error{
 	file, err := os.Open(filepath)
 	if err != nil {
 		return err
@@ -159,7 +164,7 @@ func (d *StandardDecoder) RegisterABIFromFile(filepath string) error{
 		return err
 	}
 
-	return d.RegisterABI(string(data))
+	return d.RegisterABI(name, string(data))
 }
 
 func buildSignature(item ABIItem) string {

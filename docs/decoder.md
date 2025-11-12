@@ -7,6 +7,7 @@ The Decoder is a pluggable component responsible for transforming raw blockchain
 ### Core Responsibilities
 
 - Parse ABI (Application Binary Interface) definitions
+- Store ABIs with unique identifiers for explicit selection
 - Match raw logs to event definitions via topic hash lookup
 - Decode indexed parameters from log topics
 - Decode non-indexed parameters from log data field
@@ -18,8 +19,8 @@ The Decoder interface defines the minimal contract for log decoding:
 
 ```go
 type Decoder interface {
-    Decode(log types.Log) (*Event, error)
-    DecodeBatch(logs []types.Log) ([]*Event, error)
+    Decode(name string, log types.Log) (*Event, error)
+    DecodeBatch(name string, logs []types.Log) ([]*Event, error)
     GetTopics() []string
 }
 ```
@@ -76,16 +77,50 @@ StandardDecoder is the default ABI-based implementation provided by the SDK.
 **Internal Structure:**
 ```go
 type StandardDecoder struct {
-    events    map[string]*EventDefinition  // topic hash → event definition
-    contracts map[string]*ContractABI      // contract address → ABI (optional)
+    events map[string]map[string]*EventDefinition  // ABI name → topic hash → event definition
 }
 ```
 
 **Configuration Methods:**
-- `RegisterABI(abiJSON string) error` - Parse and register all events from ABI JSON
-- `RegisterABIFromFile(filepath string) error` - Load ABI from file
-- `AddERC20() error` - Register built-in ERC20 ABI
-- `AddERC721() error` - Register built-in ERC721 ABI
+- `RegisterABI(name string, abiJSON string) error` - Parse and register all events from ABI JSON with a unique identifier
+- `RegisterABIFromFile(name string, filepath string) error` - Load ABI from file with a unique identifier
+
+### ABI Registration with Identifiers
+
+Each ABI must be registered with a unique identifier (name). This identifier is used to explicitly select which ABI to use when decoding logs. This design allows multiple ABIs with overlapping event signatures (e.g., ERC20 and ERC721 Transfer events) to coexist.
+
+**Why Identifiers are Required:**
+
+1. **Explicit Control**: Users explicitly choose which ABI to use for decoding, avoiding ambiguity
+2. **Multiple Variants**: Different contracts may emit events with the same signature but different structures (e.g., ERC20 Transfer has 3 topics, ERC721 Transfer has 4 topics)
+3. **Clear Intent**: Makes it obvious which ABI is being used for each decode operation
+4. **Performance**: Direct lookup by name and topic hash (O(1)) without iteration
+
+**Registration Example:**
+```go
+decoder := core.NewStandardDecoder()
+
+// Register ERC20 ABI with identifier "ERC20"
+decoder.RegisterABI("ERC20", erc20ABI)
+
+// Register ERC721 ABI with identifier "ERC721"
+decoder.RegisterABI("ERC721", erc721ABI)
+
+// Register custom contract ABI
+decoder.RegisterABI("MyContract", myContractABI)
+```
+
+**Decoding with Identifier:**
+```go
+// Decode using ERC20 ABI
+event, err := decoder.DecodeWith("ERC20", log)
+
+// Decode using ERC721 ABI
+event, err := decoder.DecodeWith("ERC721", log)
+
+// Batch decode with specific ABI
+events, err := decoder.DecodeWithBatch("ERC20", logs)
+```
 
 ### ABI Requirements
 
@@ -111,11 +146,13 @@ The decoder requires full event definitions, not just signatures. Each event def
 
 ### Decoding Process
 
-1. **Topic Hash Lookup**: Extract `topics[0]` and lookup event definition in registry
-2. **Indexed Parameter Decoding**: Decode `topics[1..n]` based on indexed parameter types
-3. **Data Field Decoding**: Parse log data field for non-indexed parameters
-4. **Field Population**: Combine decoded values into EventFields map
-5. **Event Construction**: Return structured Event with metadata and fields
+1. **ABI Selection**: User specifies which ABI identifier to use via `DecodeWith(name, log)`
+2. **Topic Hash Lookup**: Extract `topics[0]` and lookup event definition in the specified ABI registry
+3. **Structure Validation**: Verify log structure matches event definition (topic count, data presence)
+4. **Indexed Parameter Decoding**: Decode `topics[1..n]` based on indexed parameter types
+5. **Data Field Decoding**: Parse log data field for non-indexed parameters
+6. **Field Population**: Combine decoded values into EventFields map
+7. **Event Construction**: Return structured Event with metadata and fields
 
 ### Type Mapping (Solidity to Go)
 
@@ -131,13 +168,31 @@ The decoder requires full event definitions, not just signatures. Each event def
 | string | string | data only |
 | arrays | []T | data only |
 
+### Handling Event Variants
+
+Different contracts may emit events with the same signature but different structures. For example:
+
+- **ERC20 Transfer**: `Transfer(address indexed, address indexed, uint256)` - 3 topics, value in data
+- **ERC721 Transfer**: `Transfer(address indexed, address indexed, uint256 indexed)` - 4 topics, tokenId in topics
+
+Both have the same topic hash (`0xddf252ad...`) but different structures. By registering each with a unique identifier, users can explicitly choose which variant to use:
+
+```go
+decoder.RegisterABI("ERC20", erc20TransferABI)   // 3 topics expected
+decoder.RegisterABI("ERC721", erc721TransferABI) // 4 topics expected
+
+// User explicitly selects which variant to use
+event, err := decoder.DecodeWith("ERC20", log)   // Uses ERC20 structure
+event, err := decoder.DecodeWith("ERC721", log)  // Uses ERC721 structure
+```
+
 ### Multi-Chain Support
 
 StandardDecoder is chain-agnostic and can be shared across multiple EVM chains:
 
 ```go
 decoder := core.NewStandardDecoder()
-decoder.RegisterABI(erc20ABI)  // Works on all EVM chains
+decoder.RegisterABI("ERC20", erc20ABI)  // Works on all EVM chains
 
 processor.AddChain(ethereumChain, &Options{Decoder: decoder})
 processor.AddChain(polygonChain, &Options{Decoder: decoder})
@@ -147,14 +202,17 @@ processor.AddChain(polygonChain, &Options{Decoder: decoder})
 
 ### Multi-Contract Support
 
-A single decoder can handle multiple contracts with different ABIs:
+A single decoder can handle multiple contracts with different ABIs, each registered with a unique identifier:
 
 ```go
 decoder := core.NewStandardDecoder()
-decoder.RegisterABI(usdcABI)     // ERC20 events
-decoder.RegisterABI(uniswapABI)  // DEX events
+decoder.RegisterABI("USDC", usdcABI)        // ERC20 events
+decoder.RegisterABI("Uniswap", uniswapABI) // DEX events
+decoder.RegisterABI("NFT", nftABI)         // ERC721 events
 
-// Decoder routes logs to correct ABI via topic hash
+// Decode with explicit ABI selection
+usdcEvent, _ := decoder.DecodeWith("USDC", log)
+uniswapEvent, _ := decoder.DecodeWith("Uniswap", log)
 ```
 
 ### Custom Decoder Implementation
@@ -168,10 +226,11 @@ Users can implement custom decoders for non-standard requirements:
 - Performance optimization for known event structures
 
 **Implementation Requirements:**
-- Satisfy Decoder interface (Decode, DecodeBatch, GetTopics)
+- Satisfy Decoder interface (DecodeWith, DecodeWithBatch, GetTopics)
 - Return Event objects with proper structure
 - Handle errors gracefully
 
 ### Integration with Processor
 
 The Processor invokes the decoder after log fetching:
+```

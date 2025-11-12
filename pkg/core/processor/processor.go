@@ -329,7 +329,7 @@ outer:
 							return
 
 						} else {
-							//log.Printf("Processed log from block %d to block %d...\n", next, end)
+							log.Printf("Processed log from block %d to block %d...\n", next, end)
 							// Commit logs to log channel
 							if logs := windowLogs[next]; len(logs) > 0 {
 								for _, l:= range logs {
