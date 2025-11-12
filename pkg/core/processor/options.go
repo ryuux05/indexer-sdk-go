@@ -1,4 +1,6 @@
-package core
+package processor
+
+import "github.com/ryuux05/godex/pkg/core/rpc"
 
 type FetchMode string
 
@@ -45,7 +47,7 @@ type Options struct {
 	// RetryConfig manage how to handle retry on retriable errors.
 	// Use pointer since it nillable
 	// There is default settings
-	RetryConfig *RetryConfig
+	RetryConfig *rpc.RetryConfig
 }
 
 type ChainInfo struct {
@@ -55,6 +57,6 @@ type ChainInfo struct {
 	// Name of the chain
 	Name    string
 	// RPC information of the chain.
-	RPC     RPC
+	RPC     rpc.RPC
 }
 

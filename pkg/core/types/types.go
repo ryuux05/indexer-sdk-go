@@ -1,4 +1,4 @@
-package core
+package types
 
 const ZeroAddress Address = "0x0000000000000000000000000000000000000000"
 
@@ -20,7 +20,7 @@ type Log struct {
 	Address string `json:"address,omitempty"`
 	// An array of zero to four 32 Bytes DATA of indexed log arguments. 
 	// In Solidity, the first topic is the hash of the signature of the event (e.g. Deposit(address, bytes32, uint256)), except you declare the event with the anonymous specifier
-	Topics []any `json:"topics,omitempty"`
+	Topics []string `json:"topics,omitempty"`
 	// It contains one or more 32 Bytes non-indexed arguments of the log
 	Data string `json:"data,omitempty"`
 	// The block number where this log was in. null when it's a pending log

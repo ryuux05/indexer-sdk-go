@@ -1,4 +1,4 @@
-package core
+package rpc
 
 import (
 	"context"
@@ -6,6 +6,8 @@ import (
 	"log"
 	"math/rand"
 	"time"
+
+	"github.com/ryuux05/godex/pkg/core/errors"
 )
 
 type RetryConfig struct {
@@ -62,7 +64,7 @@ func RetryWithBackoff(ctx context.Context, config RetryConfig, fn func() error) 
 		}
 
 		// Check if the error is retriable
-		if !isRetryableError(lastErr) {
+		if !errors.IsRetryableError(lastErr) {
 			return fmt.Errorf("non-retryable error: %w", lastErr)
 		}
 

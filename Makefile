@@ -1,7 +1,7 @@
 # Variables
-BINARY_NAME := dashboard
+BINARY_NAME := godex
 BINARY_PATH := bin/$(BINARY_NAME)
-CMD_DIR := ./cmd/dashboard
+CMD_DIR := ./cmd/main
 PKG := ./...
 
 # Default target: build the project.
@@ -18,9 +18,7 @@ build:
 
 # Run the built binary. If it doesn't exist, build it first.
 .PHONY: run
-run: build
-	@echo "Running $(BINARY_NAME)..."
-	@./$(BINARY_PATH)
+	@go run ./cmd/main.go
 
 # Run tests across all packages.
 .PHONY: test

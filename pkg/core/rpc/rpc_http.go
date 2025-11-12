@@ -1,4 +1,4 @@
-package core
+package rpc
 
 import (
 	"bytes"
@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/ryuux05/godex/pkg/core/errors"
+	"github.com/ryuux05/godex/pkg/core/types"
 )
 
 type HTTPRPC struct{
@@ -26,7 +28,7 @@ type rpcResponse[T any] struct {
 	JSONRPC string `json:"jsonrpc"`
 	ID uint `json:"id"`
 	Result T `json:"result"`
-	Error *RPCError `json:"error"`
+	Error *errors.RPCError `json:"error"`
 }
 
 // NewHTTPRPC creates an HTTP JSON-RPC client.
@@ -68,7 +70,7 @@ func(r *HTTPRPC) Head(ctx context.Context) (string, error) {
 
 	if res.StatusCode != http.StatusOK {
 		// HTTP error - transport layer failed
-		return "", &HTTPError{
+		return "", &errors.HTTPError{
 			StatusCode: res.StatusCode,
 			Message: res.Status,
 		}
@@ -84,7 +86,7 @@ func(r *HTTPRPC) Head(ctx context.Context) (string, error) {
 	}
 	if resp.Error != nil {
 		// RPC error - RPC protocol error
-		return "", &RPCError{
+		return "", &errors.RPCError{
 			Code: resp.Error.Code,
 			Message: resp.Error.Message,
 		}
@@ -95,7 +97,7 @@ func(r *HTTPRPC) Head(ctx context.Context) (string, error) {
 }
 
 // GetBlock returns the block header for now (second params is set to false)
-func(r *HTTPRPC) GetBlock(ctx context.Context, blockNumber string) (Block, error) {
+func(r *HTTPRPC) GetBlock(ctx context.Context, blockNumber string) (types.Block, error) {
 	body := map[string]interface{} {
 		"jsonrpc": "2.0",
 		"id": 1,
@@ -108,25 +110,25 @@ func(r *HTTPRPC) GetBlock(ctx context.Context, blockNumber string) (Block, error
 
 	b, err := json.Marshal(body)
 	if err != nil {
-		return Block{}, fmt.Errorf("error marshaling body: %w", err)		
+		return types.Block{}, fmt.Errorf("error marshaling body: %w", err)		
 	}
 
 
 	req, err := http.NewRequestWithContext(ctx, "POST", r.endpoint, bytes.NewReader(b))
 	if err != nil {
-		return Block{}, fmt.Errorf("error creating http request: %w", err)
+		return types.Block{}, fmt.Errorf("error creating http request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	
 
 	res, err := r.client.Do(req)
 	if err != nil {
-		return Block{}, fmt.Errorf("error fetching rpc: %w", err)		
+		return types.Block{}, fmt.Errorf("error fetching rpc: %w", err)		
 	}
 	defer res.Body.Close()
 
 	if res.StatusCode != http.StatusOK {
-		return Block{}, &HTTPError{
+		return types.Block{}, &errors.HTTPError{
 			StatusCode: res.StatusCode,
 			Message: res.Status,
 		}
@@ -134,13 +136,13 @@ func(r *HTTPRPC) GetBlock(ctx context.Context, blockNumber string) (Block, error
 
 
 
-	var resp rpcResponse[Block]
+	var resp rpcResponse[types.Block]
 
 	if err := json.NewDecoder(res.Body).Decode(&resp); err != nil {
-		return Block{}, fmt.Errorf("error reading response body: %w", err)
+		return types.Block{}, fmt.Errorf("error reading response body: %w", err)
 	}
 	if resp.Error != nil {
-		return Block{}, &RPCError{
+		return types.Block{}, &errors.RPCError{
 			Code: resp.Error.Code,
 			Message: resp.Error.Message,
 		}
@@ -149,7 +151,7 @@ func(r *HTTPRPC) GetBlock(ctx context.Context, blockNumber string) (Block, error
 	return resp.Result, nil
 }
 
-func(r *HTTPRPC) GetLogs(ctx context.Context, filter Filter) ([]Log, error) {
+func(r *HTTPRPC) GetLogs(ctx context.Context, filter types.Filter) ([]types.Log, error) {
 	body := map[string]interface{} {
 		"jsonrpc": "2.0",
 		"id": 1,
@@ -161,36 +163,36 @@ func(r *HTTPRPC) GetLogs(ctx context.Context, filter Filter) ([]Log, error) {
 
 	b, err := json.Marshal(body)
 	if err != nil {
-		return []Log{}, fmt.Errorf("error marshaling body: %w", err)
+		return []types.Log{}, fmt.Errorf("error marshaling body: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", r.endpoint, bytes.NewReader(b))
 	if err != nil {
-		return []Log{}, fmt.Errorf("error creating http request: %w", err)
+		return []types.Log{}, fmt.Errorf("error creating http request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	
 	res, err := r.client.Do(req)
 	if err != nil {
-		return []Log{}, fmt.Errorf("error fetching rpc: %w", err)				
+		return []types.Log{}, fmt.Errorf("error fetching rpc: %w", err)				
 	}
 	defer res.Body.Close()
 
 	if res.StatusCode != http.StatusOK {
-		return []Log{}, &HTTPError{
+		return []types.Log{}, &errors.HTTPError{
 			StatusCode: res.StatusCode,
 			Message: res.Status,
 		}
 	}
 
 
-	var resp rpcResponse[[]Log]
+	var resp rpcResponse[[]types.Log]
 
 	if err := json.NewDecoder(res.Body).Decode(&resp); err != nil {
-		return []Log{}, fmt.Errorf("error reading response body: %w", err)
+		return []types.Log{}, fmt.Errorf("error reading response body: %w", err)
 	}
 	if resp.Error != nil {
-		return []Log{}, &RPCError{
+		return []types.Log{}, &errors.RPCError{
 			Code: resp.Error.Code,
 			Message: resp.Error.Message,
 		}
@@ -199,7 +201,7 @@ func(r *HTTPRPC) GetLogs(ctx context.Context, filter Filter) ([]Log, error) {
 	return resp.Result, nil
 }
 
-func(r *HTTPRPC) GetBlockReceipts(ctx context.Context, blockNumber string) ([]Receipt, error) {
+func(r *HTTPRPC) GetBlockReceipts(ctx context.Context, blockNumber string) ([]types.Receipt, error) {
 	body := map[string]interface{} {
 		"jsonrpc": "2.0",
 		"id": 1,
@@ -211,35 +213,35 @@ func(r *HTTPRPC) GetBlockReceipts(ctx context.Context, blockNumber string) ([]Re
 
 	b, err := json.Marshal(body)
 	if err != nil {
-		return []Receipt{}, fmt.Errorf("error marshaling body: %w", err)
+		return []types.Receipt{}, fmt.Errorf("error marshaling body: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, "POST", r.endpoint, bytes.NewReader(b))
 	if err != nil {
-		return []Receipt{}, fmt.Errorf("error creating http request: %w", err)
+		return []types.Receipt{}, fmt.Errorf("error creating http request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	res, err := r.client.Do(req)
 	if err != nil {
-		return []Receipt{}, fmt.Errorf("error fetching rpc: %w", err)	
+		return []types.Receipt{}, fmt.Errorf("error fetching rpc: %w", err)	
 	}
 	defer res.Body.Close()
 
 	if res.StatusCode != http.StatusOK {
-		return []Receipt{},  &HTTPError{
+		return []types.Receipt{},  &errors.HTTPError{
 			StatusCode: res.StatusCode,
 			Message: res.Status,
 		}
 	} 
 
-	var resp rpcResponse[[]Receipt]
+	var resp rpcResponse[[]types.Receipt]
 
 	if err := json.NewDecoder(res.Body).Decode(&resp); err != nil {
-		return []Receipt{}, fmt.Errorf("error reading response body: %w", err)
+		return []types.Receipt{}, fmt.Errorf("error reading response body: %w", err)
 	}
 	if resp.Error != nil {
-		return []Receipt{}, &RPCError{
+		return []types.Receipt{}, &errors.RPCError{
 			Code: resp.Error.Code,
 			Message: resp.Error.Message,
 		}

@@ -1,4 +1,4 @@
-package core
+package errors
 
 import (
 	"errors"
@@ -30,7 +30,7 @@ func (e *RPCError) Error() string {
 }
 
 // Helper function to check if the error is retriable
-func isRetryableError(err error) bool {
+func IsRetryableError(err error) bool {
 	// Try to extract HTTPError
 	var httpErr *HTTPError
 	if errors.As(err, &httpErr) {
